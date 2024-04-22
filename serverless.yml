@@ -118,6 +118,13 @@ provider:
   name: aws
   runtime: nodejs20.x
   region: us-east-1 # or your desired region
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - iot:CreateThingGroup
+        - iot:CreateThing
+        - iot:AddThingToThingGroup
+      Resource: "*"
 
 functions:
   registerUser:

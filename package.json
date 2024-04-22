@@ -1,6 +1,7 @@
 {
   "devDependencies": {
-    "serverless-offline": "^13.3.4"
+    "serverless-offline": "^13.3.4",
+    "serverless-step-functions": "^3.21.0"
   },
   "dependencies": {
     "aws-sdk": "^2.1603.0"
