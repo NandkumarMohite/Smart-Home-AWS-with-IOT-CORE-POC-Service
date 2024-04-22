@@ -21,7 +21,7 @@ module.exports.registerUser = async (event) => {
                 { Name: 'address', Value: address },
                 { Name: 'gender', Value: gender },
                 { Name: 'given_name', Value: given_name },
-                // Add more user attributes as needed
+
             ]
         };
 
