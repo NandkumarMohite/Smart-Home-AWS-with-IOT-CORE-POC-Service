@@ -1,8 +1,15 @@
 const AWS = require('aws-sdk');
 const cognitoIdentityServiceProvider = new AWS.CognitoIdentityServiceProvider();
 const fs = require('fs')
-// const iot = new AWS.IotData({ endpoint: 'a2xdgnb8rzgu7v.iot.us-east-1.amazonaws.com' }); // Specify your AWS IoT endpoint
 const iot = new AWS.Iot();
+const paramsCertificate = {
+    keyPath: "./certificates/private-key.pem.key",
+    certPath: "./certificates/certificate.pem.crt",
+    caPath: "./certificates/AmazonRootCA1.pem",
+    clientId: "iotconsole-10a48a6b-1ddf-4233-bdc8-1cdf1ae84b9e",
+    endpoint: "a2xdgnb8rzgu7v-ats.iot.us-east-1.amazonaws.com"
+};
+const device = new AWS.IotData(paramsCertificate);
 const docClient = new AWS.DynamoDB.DocumentClient();
 module.exports.registerUser = async (event) => {
     const { username, email, address, gender, given_name, password } = JSON.parse(event.body);
@@ -146,44 +153,37 @@ module.exports.publishToIoT = async (event) => {
     const topicPrefix = `home/groups/${thingGroupName}/things`;
 
     const topic = `${topicPrefix}/${thingName}/${sensorData}`;
-    console.log("topic",topic);
+    console.log("topic", topic);
     const params = {
         topic: topic,
-        payload: JSON.stringify({ message: message }),
+        payload: JSON.stringify({ message: `${message}+${userId}` }),
         qos: 0
     };
-    console.log("params",params);
-    const paramsCertificate = {
-        keyPath: "./certificates/private-key.pem.key",
-        certPath: "./certificates/certificate.pem.crt",
-        caPath: "./certificates/AmazonRootCA1.pem",
-        clientId: "iotconsole-10a48a6b-1ddf-4233-bdc8-1cdf1ae84b9e",
-        endpoint: "a2xdgnb8rzgu7v-ats.iot.us-east-1.amazonaws.com"
-      };
-      const device = new AWS.IotData(paramsCertificate);
-      console.log("device",device);
+    console.log("params", params);
+    console.log("device", device);
     try {
         await device.publish(params).promise();
         const queryParams = {
             TableName: 'UserHomeThingGroupData',
             Key: {
-              'userId': userId,
+                'userId': userId,
             },
-          };
-      
-          // Perform the GetItem operation
-          const scanedData = await docClient.get(queryParams).promise();
-          console.log("scanedData", scanedData);
+        };
+
+        // Perform the GetItem operation
+        const scanedData = await docClient.get(queryParams).promise();
+        console.log("scanedData", scanedData);
         //   console.log("scanedData.Item.LightBulb", scanedData.Item.LightBulb);
-        (scanedData.Item.LightBulb == "ON") ?  updateLightBulb = "ON" : updateLightBulb = "OFF";
+        let updateLightBulb = "OFF";
+        (scanedData.Item?.LightBulb == "ON") ? updateLightBulb = "ON" : updateLightBulb = "OFF";
 
         const dynamoParams = {
             TableName: 'UserHomeThingGroupData',
             Item: {
-                userId: userId, 
+                userId: userId,
                 MotionSensor: message,
                 LightBulb: updateLightBulb,
-                isUserOnHoliday: false 
+                isUserOnHoliday: false
             }
         };
 
@@ -191,7 +191,7 @@ module.exports.publishToIoT = async (event) => {
 
         return {
             statusCode: 200,
-            body: JSON.stringify({ message: 'Message published successfully' })
+            body: JSON.stringify({ message: 'Message published successfully to motion Sensor' })
         };
     } catch (err) {
         console.error('Error publishing message:', err);
@@ -201,3 +201,93 @@ module.exports.publishToIoT = async (event) => {
         };
     }
 };
+
+module.exports.subscribePublishLightThing = async (event) => {
+    try {
+        // Check if event.Records is undefined or empty
+        console.log("event", event);
+        if (event == undefined || event == null || event == {}) {
+            console.error('No records found in the event');
+            return {
+                statusCode: 400,
+                body: JSON.stringify('No records found in the event')
+            };
+        }
+        // Extract message from the incoming MQTT event
+        const data = event.message;
+        // const data = event.toString();
+        console.log("DATA", data);
+        const myMessageAndUseID = data.split("+")
+        // Check if motion is detected
+        if (myMessageAndUseID[0] == "motion_detected") {
+            // Publish MQTT message to turn on the light bulb
+            console.log("Inside if statement");
+            await publishToLightBulb('LightBulb_ON', myMessageAndUseID[1]);
+        }
+
+        console.log("publishToLightBulb successfull");
+        return {
+
+            statusCode: 200,
+            body: JSON.stringify('Motion processed successfully')
+        };
+    } catch (error) {
+        console.error('Error processing motion:', error);
+        return {
+            statusCode: 500,
+            body: JSON.stringify('Error processing motion')
+        };
+    }
+};
+
+async function publishToLightBulb(message, userId) {
+    const thingGroupName = `Home_${userId}`;
+    const thingName = "LightBulb"; // Assuming all things are motion sensors
+
+    // Define sensor data and topic prefix
+    const sensorData = "status";
+    const topicPrefix = `home/groups/${thingGroupName}/things`;
+
+    const topic = `${topicPrefix}/${thingName}/${sensorData}`;
+    console.log("topic", topic);
+    const params = {
+        topic: topic, // Replace 'light-bulb-topic' with the MQTT topic your light bulb is subscribed to
+        payload: JSON.stringify({ message, userId }),
+        qos: 1 // Quality of Service level
+    };
+    try {
+        await device.publish(params).promise();
+        console.log('Message published successfully to motion Light Bulb');
+        const queryParams = {
+            TableName: 'UserHomeThingGroupData',
+            Key: {
+                'userId': userId,
+            },
+        };
+
+        // Perform the GetItem operation
+        const scanedData = await docClient.get(queryParams).promise();
+        console.log("scanedData", scanedData);
+        //   console.log("scanedData.Item.LightBulb", scanedData.Item.LightBulb);
+        let updateMesage = "motion_not_detected";
+        (scanedData.Item?.MotionSensor == "motion_detected") ? updateMesage = "motion_detected" : updateMesage = "motion_not_detected";
+
+        const dynamoParams = {
+            TableName: 'UserHomeThingGroupData',
+            Item: {
+                userId: userId,
+                MotionSensor: updateMesage,
+                LightBulb: "ON",
+                isUserOnHoliday: false
+            }
+        };
+
+        await docClient.put(dynamoParams).promise();
+
+    } catch (err) {
+        console.error('Error publishing message:', err);
+        return {
+            body: JSON.stringify({ message: 'Error publishing message' })
+        };
+    }
+}

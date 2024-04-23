@@ -161,7 +161,12 @@ functions:
     events:
       - http:
           path: publish-to-iot
-          method: post      
+          method: post
+  subscribePublishLightThing:
+    handler: handler.subscribePublishLightThing
+    events:
+      - iot:
+          sql: "SELECT * FROM 'home/groups/+/things/MotionSensor/status'"          
 resources:
   Resources:
     UserHomeThingGroupData:
