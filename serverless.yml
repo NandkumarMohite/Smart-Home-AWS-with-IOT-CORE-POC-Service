@@ -121,9 +121,14 @@ provider:
   iamRoleStatements:
     - Effect: Allow
       Action:
+        - s3:GetObject
+      Resource: "arn:aws:s3:::dataofca/MotionSensor.cert.pem"  
+    - Effect: Allow
+      Action:
         - iot:CreateThingGroup
         - iot:CreateThing
         - iot:AddThingToThingGroup
+        - iot:Publish
       Resource: "*"
 
 functions:
@@ -134,6 +139,12 @@ functions:
           path: register
           method: post
           cors: true
+  publishToIoT:
+    handler: handler.publishToIoT
+    events:
+      - http:
+          path: publish-to-iot
+          method: post
 
 plugins:
   - serverless-offline # for local testing
