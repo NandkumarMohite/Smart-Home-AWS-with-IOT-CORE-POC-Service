@@ -203,3 +203,23 @@ module.exports.publishToIoT = async (event) => {
       };
     }
   };   
+
+
+//   const device = awsIot.device({
+//     keyPath: "./certificates/private-key.pem.key",
+//     certPath: "./certificates/certificate.pem.crt",
+//     caPath: "./certificates/AmazonRootCA1.pem",
+//     clientId: "iotconsole-fc463372-36be-4777-95b3-d42e606372fe",
+//     host: "a19poveleatzc-ats.iot.us-east-1.amazonaws.com",
+//   });
+   
+//   device.on("connect", function () {
+//     device.subscribe("moin/deviceFailure", (err) => {
+//       if (err) {
+//         console.log("Error subscribing to topic", err);
+//       } else {
+//         console.log("Subscribed to topic");
+//       }
+//     });
+//     console.log("Connected to AWS IoT");
+//   });
