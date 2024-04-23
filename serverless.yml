@@ -121,6 +121,23 @@ provider:
   iamRoleStatements:
     - Effect: Allow
       Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+      Resource: "arn:aws:dynamodb:us-east-1:730335246533:table/UserHomeThingGroupData"
+    - Effect: Allow
+      Action:
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource: "arn:aws:dynamodb:us-east-1:730335246533:table/UserHomeThingGroupData"  
+    - Effect: Allow
+      Action:
+        - iot:CreateKeysAndCertificate
+        - iot:AttachThingPrincipal
+      Resource: "*"
+    - Effect: Allow
+      Action:
         - s3:GetObject
       Resource: "arn:aws:s3:::dataofca/MotionSensor.cert.pem"  
     - Effect: Allow
@@ -145,6 +162,33 @@ functions:
       - http:
           path: publish-to-iot
           method: post
-
+resources:
+  Resources:
+    MyDynamoDBTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: UserHomeThingGroupData
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: MotionSensor
+            AttributeType: S
+          - AttributeName: LightBulb
+            AttributeType: S
+          - AttributeName: isUserOnHoliday
+            AttributeType: BOOL             
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
+        GlobalSecondaryIndexes:
+          - IndexName: MotionSensorIndex
+            KeySchema:
+              - AttributeName: MotionSensor
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL         
 plugins:
   - serverless-offline # for local testing

@@ -2,27 +2,8 @@ const AWS = require('aws-sdk');
 const cognitoIdentityServiceProvider = new AWS.CognitoIdentityServiceProvider();
 const fs = require('fs')
 // const iot = new AWS.IotData({ endpoint: 'a2xdgnb8rzgu7v.iot.us-east-1.amazonaws.com' }); // Specify your AWS IoT endpoint
-const s3 = new AWS.S3();
-const s3BucketName = 'dataofca';
-const caCertKey = 'MotionSensor.cert.pem';
-
-let caCert;
-
-async function loadCACertificate() {
-    try {
-        const params = {
-            Bucket: s3BucketName,
-            Key: caCertKey
-        };
-
-        const data = await s3.getObject(params).promise();
-        caCert = data.Body.toString();
-    } catch (err) {
-        console.error('Error loading CA certificate from S3:', err);
-        throw err;
-    }
-}
-
+const iot = new AWS.Iot();
+const docClient = new AWS.DynamoDB.DocumentClient();
 module.exports.registerUser = async (event) => {
     const { username, email, address, gender, given_name, password } = JSON.parse(event.body);
 
@@ -74,9 +55,6 @@ module.exports.registerUser = async (event) => {
 
 async function invokeStepFunction(UserSub) {
     const userId = UserSub; // You need to pass the userId from Cognito
-
-    const iot = new AWS.Iot();
-
     try {
         // Create thing group for the user's home
         const params = {
@@ -157,69 +135,56 @@ async function invokeStepFunction(UserSub) {
     }
 
 }
-
 module.exports.publishToIoT = async (event) => {
-    if (!caCert) {
-        await loadCACertificate();
-    }
-    try {
-        const iot = new AWS.IotData({
-            endpoint: 'a2xdgnb8rzgu7v.iot.us-east-1.amazonaws.com',
-            httpOptions: {
-                agent: new require('https').Agent({
-                    ca: caCert
-                })
-            }
-        });
-        console.log('IoT Data:', iot);
-        const { userId, value } = JSON.parse(event.body);
-  
-        // Construct thing group name and thing name
-        const thingGroupName = `Home_${userId}`;
-        const thingName = "MotionSensor"; // Assuming all things are motion sensors
-    
-        // Define sensor data and topic prefix
-        const sensorData = "status";
-        const topicPrefix = `home/groups/${thingGroupName}/things`;
-        const params = {
-            topic: `${topicPrefix}/${thingName}/${sensorData}`, // Specify the MQTT topic to publish to
-            payload: JSON.stringify({ message: value }),
-            qos: 0
-        };
+    // userId = event.userId;
+    const body = JSON.parse(event.body);
+    const { userId, message } = body;
+    const thingGroupName = `Home_${userId}`;
+    const thingName = "MotionSensor"; // Assuming all things are motion sensors
 
-        await iot.publish(params).promise();
+    // Define sensor data and topic prefix
+    const sensorData = "status";
+    const topicPrefix = `home/groups/${thingGroupName}/things`;
+
+    const topic = `${topicPrefix}/${thingName}/${sensorData}`;
+    console.log("topic",topic);
+    const params = {
+        topic: topic,
+        payload: JSON.stringify({ message: message }),
+        qos: 0
+    };
+    console.log("params",params);
+    const paramsCertificate = {
+        keyPath: "./certificates/private-key.pem.key",
+        certPath: "./certificates/certificate.pem.crt",
+        caPath: "./certificates/AmazonRootCA1.pem",
+        clientId: "iotconsole-10a48a6b-1ddf-4233-bdc8-1cdf1ae84b9e",
+        endpoint: "a2xdgnb8rzgu7v-ats.iot.us-east-1.amazonaws.com"
+      };
+      const device = new AWS.IotData(paramsCertificate);
+      console.log("device",device);
+    try {
+        await device.publish(params).promise();
+        const dynamoParams = {
+            TableName: 'UserHomeThingGroupData',
+            Item: {
+                userId: userId,
+                LightBulb: 'off', // Assuming default values
+                MotionSensor: 'nomotionDetected', // Assuming default values
+                isUserOnHoliday: false // Assuming default values
+            }
+        };
+        await docClient.put(dynamoParams).promise();
 
         return {
             statusCode: 200,
-            body: JSON.stringify('Message published successfully')
+            body: JSON.stringify({ message: 'Message published successfully' })
         };
-    } 
-    catch (error) {
-      // Handle errors
-      console.error('Error publishing sensor data:', error);
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ message: 'Error publishing sensor data' })
-      };
+    } catch (err) {
+        console.error('Error publishing message:', err);
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ message: 'Error publishing message' })
+        };
     }
-  };   
-
-
-//   const device = awsIot.device({
-//     keyPath: "./certificates/private-key.pem.key",
-//     certPath: "./certificates/certificate.pem.crt",
-//     caPath: "./certificates/AmazonRootCA1.pem",
-//     clientId: "iotconsole-fc463372-36be-4777-95b3-d42e606372fe",
-//     host: "a19poveleatzc-ats.iot.us-east-1.amazonaws.com",
-//   });
-   
-//   device.on("connect", function () {
-//     device.subscribe("moin/deviceFailure", (err) => {
-//       if (err) {
-//         console.log("Error subscribing to topic", err);
-//       } else {
-//         console.log("Subscribed to topic");
-//       }
-//     });
-//     console.log("Connected to AWS IoT");
-//   });
+};
