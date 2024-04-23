@@ -136,7 +136,6 @@ async function invokeStepFunction(UserSub) {
 
 }
 module.exports.publishToIoT = async (event) => {
-    // userId = event.userId;
     const body = JSON.parse(event.body);
     const { userId, message } = body;
     const thingGroupName = `Home_${userId}`;
@@ -165,15 +164,29 @@ module.exports.publishToIoT = async (event) => {
       console.log("device",device);
     try {
         await device.publish(params).promise();
+        const queryParams = {
+            TableName: 'UserHomeThingGroupData',
+            Key: {
+              'userId': userId,
+            },
+          };
+      
+          // Perform the GetItem operation
+          const scanedData = await docClient.get(queryParams).promise();
+          console.log("scanedData", scanedData);
+        //   console.log("scanedData.Item.LightBulb", scanedData.Item.LightBulb);
+        (scanedData.Item.LightBulb == "ON") ?  updateLightBulb = "ON" : updateLightBulb = "OFF";
+
         const dynamoParams = {
             TableName: 'UserHomeThingGroupData',
             Item: {
-                userId: userId,
-                LightBulb: 'off', // Assuming default values
-                MotionSensor: 'nomotionDetected', // Assuming default values
-                isUserOnHoliday: false // Assuming default values
+                userId: userId, 
+                MotionSensor: message,
+                LightBulb: updateLightBulb,
+                isUserOnHoliday: false 
             }
         };
+
         await docClient.put(dynamoParams).promise();
 
         return {

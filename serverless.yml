@@ -161,34 +161,37 @@ functions:
     events:
       - http:
           path: publish-to-iot
-          method: post
+          method: post      
 resources:
   Resources:
-    MyDynamoDBTable:
+    UserHomeThingGroupData:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: UserHomeThingGroupData
         AttributeDefinitions:
           - AttributeName: userId
-            AttributeType: S
-          - AttributeName: MotionSensor
-            AttributeType: S
-          - AttributeName: LightBulb
-            AttributeType: S
-          - AttributeName: isUserOnHoliday
-            AttributeType: BOOL             
+            AttributeType: S             
         KeySchema:
           - AttributeName: userId
             KeyType: HASH
         ProvisionedThroughput:
           ReadCapacityUnits: 5
           WriteCapacityUnits: 5
-        GlobalSecondaryIndexes:
-          - IndexName: MotionSensorIndex
-            KeySchema:
-              - AttributeName: MotionSensor
-                KeyType: HASH
-            Projection:
-              ProjectionType: ALL         
+
+    # resources: # CloudFormation template syntax from here on.
+    #   Resources:
+    #     usersTable:
+    #       Type: AWS::DynamoDB::Table
+    #       Properties:
+    #         TableName: usersTable
+    #         AttributeDefinitions:
+    #           - AttributeName: email
+    #             AttributeType: S
+    #         KeySchema:
+    #           - AttributeName: email
+    #             KeyType: HASH
+    #         ProvisionedThroughput:
+    #           ReadCapacityUnits: 1
+    #           WriteCapacityUnits: 1                     
 plugins:
   - serverless-offline # for local testing
