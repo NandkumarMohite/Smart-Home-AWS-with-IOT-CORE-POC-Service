@@ -38,12 +38,7 @@ module.exports.registerUser = async (event) => {
                 body: JSON.stringify({ message: 'No app clients found' })
             };
         }
-    } catch (err) {
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ message: 'Internal Server Error' })
-        };
-    }
+    
 
         const signUpParams = {
             ClientId: '4bibt2acj6lniph0ufutm7i1au', // Specify your Cognito User Pool Client ID
