@@ -156,14 +156,14 @@ functions:
           path: register
           method: post
           cors: true
-  publishToIoT:
-    handler: handler.publishToIoT
+  publishSensorSignalToIoT:
+    handler: handler.publishSensorSignalToIoT
     events:
       - http:
           path: publish-to-iot
           method: post
-  subscribePublishLightThing:
-    handler: handler.subscribePublishLightThing
+  subscribeTheMotionSensorForMQQT:
+    handler: handler.subscribeTheMotionSensorForMQQT
     events:
       - iot:
           sql: "SELECT * FROM 'home/groups/+/things/MotionSensor/status'"          

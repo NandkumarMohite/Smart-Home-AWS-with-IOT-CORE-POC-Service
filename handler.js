@@ -36,7 +36,7 @@ module.exports.registerUser = async (event) => {
         };
 
         const data = await cognitoIdentityServiceProvider.signUp(signUpParams).promise();
-        await invokeStepFunction(data.UserSub);
+        await addThingGroupForUser(data.UserSub);
 
         return {
             statusCode: 200,
@@ -60,7 +60,7 @@ module.exports.registerUser = async (event) => {
     }
 };
 
-async function invokeStepFunction(UserSub) {
+async function addThingGroupForUser(UserSub) {
     const userId = UserSub; // You need to pass the userId from Cognito
     try {
         // Create thing group for the user's home
@@ -142,7 +142,7 @@ async function invokeStepFunction(UserSub) {
     }
 
 }
-module.exports.publishToIoT = async (event) => {
+module.exports.publishSensorSignalToIoT = async (event) => {
     const body = JSON.parse(event.body);
     const { userId, message } = body;
     const thingGroupName = `Home_${userId}`;
@@ -202,7 +202,7 @@ module.exports.publishToIoT = async (event) => {
     }
 };
 
-module.exports.subscribePublishLightThing = async (event) => {
+module.exports.subscribeTheMotionSensorForMQQT = async (event) => {
     try {
         // Check if event.Records is undefined or empty
         console.log("event", event);
@@ -222,7 +222,7 @@ module.exports.subscribePublishLightThing = async (event) => {
         if (myMessageAndUseID[0] == "motion_detected") {
             // Publish MQTT message to turn on the light bulb
             console.log("Inside if statement");
-            await publishToLightBulb('LightBulb_ON', myMessageAndUseID[1]);
+            await publishLightBulbSignalToIoT('LightBulb_ON', myMessageAndUseID[1]);
         }
 
         console.log("publishToLightBulb successfull");
@@ -240,7 +240,7 @@ module.exports.subscribePublishLightThing = async (event) => {
     }
 };
 
-async function publishToLightBulb(message, userId) {
+async function publishLightBulbSignalToIoT(message, userId) {
     const thingGroupName = `Home_${userId}`;
     const thingName = "LightBulb"; // Assuming all things are motion sensors
 
