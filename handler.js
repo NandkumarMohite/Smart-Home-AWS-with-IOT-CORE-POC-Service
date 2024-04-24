@@ -22,31 +22,13 @@ module.exports.registerUser = async (event) => {
         };
     }
     try {
-        const YOUR_USER_POOL_IDPRAM = {
-            UserPoolId: 'YOUR_USER_POOL_ID' // Replace with your actual user pool ID
+        const CognitoParams = {
+            UserPoolId: 'us-east-1_S2Ke4L7mu' // Replace with your actual user pool ID
         };
-        const response = await cognitoIdentityServiceProvider.listUserPoolClients(YOUR_USER_POOL_IDPRAM).promise();
-        if (response.UserPoolClients.length > 0) {
-            // return {
-            //     statusCode: 200,
-            //     body: JSON.stringify({ clientId: response.UserPoolClients[0].ClientId })
-            // };
-            console.log("ClientId", response.UserPoolClients[0].ClientId)
-        } else {
-            return {
-                statusCode: 404,
-                body: JSON.stringify({ message: 'No app clients found' })
-            };
-        }
-    } catch (err) {
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ message: 'Internal Server Error' })
-        };
-    }
-
+        const response = await cognitoIdentityServiceProvider.listUserPoolClients(CognitoParams).promise();
+        console.log("ClientId", response.UserPoolClients[0].ClientId);
         const signUpParams = {
-            ClientId: '4bibt2acj6lniph0ufutm7i1au', // Specify your Cognito User Pool Client ID
+            ClientId: response.UserPoolClients[0].ClientId, // Specify your Cognito User Pool Client ID
             Username: username,
             Password: password,
             UserAttributes: [

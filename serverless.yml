@@ -139,7 +139,11 @@ provider:
     - Effect: Allow
       Action:
         - s3:GetObject
-      Resource: "arn:aws:s3:::dataofca/MotionSensor.cert.pem"  
+      Resource: "arn:aws:s3:::dataofca/MotionSensor.cert.pem" 
+    - Effect: Allow
+      Action:
+        - cognito-idp:ListUserPoolClients
+      Resource: "arn:aws:cognito-idp:us-east-1:730335246533:userpool/*"
     - Effect: Allow
       Action:
         - iot:CreateThingGroup
