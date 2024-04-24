@@ -147,7 +147,11 @@ provider:
         - iot:AddThingToThingGroup
         - iot:Publish
       Resource: "*"
-
+    - Effect: Allow
+      Action: 
+        - cloudformation:DescribeStacks
+      Resource: 
+        - "arn:aws:cloudformation:us-east-1:730335246533:stack/my-cognito-service-dev/*"      
 functions:
   registerUser:
     handler: handler.registerUser
@@ -156,14 +160,14 @@ functions:
           path: register
           method: post
           cors: true
-  publishSensorSignalToIoT:
-    handler: handler.publishSensorSignalToIoT
+  publishSensorSignalToMQQT:
+    handler: handler.publishSensorSignalToMQQT
     events:
       - http:
           path: publish-to-iot
           method: post
-  subscribeTheMotionSensorForMQQT:
-    handler: handler.subscribeTheMotionSensorForMQQT
+  subscribeTheMotionSensorFromMQQT:
+    handler: handler.subscribeTheMotionSensorFromMQQT
     events:
       - iot:
           sql: "SELECT * FROM 'home/groups/+/things/MotionSensor/status'"          
@@ -182,6 +186,51 @@ resources:
         ProvisionedThroughput:
           ReadCapacityUnits: 5
           WriteCapacityUnits: 5
+
+    MyUserByUsingServerless:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: MyUserByUsingServerless
+        UsernameAttributes:
+          - email
+        AutoVerifiedAttributes:
+          - email
+        MfaConfiguration: OFF
+        EmailVerificationSubject: Verify your email for our app
+        EmailVerificationMessage: Please click the link below to verify your email address. {####}
+        Policies:
+          PasswordPolicy:
+            MinimumLength: 8
+            RequireLowercase: true
+            RequireNumbers: true
+            RequireSymbols: true
+            RequireUppercase: true
+        Schema:
+          - Name: email
+            Required: true
+            AttributeDataType: String
+          - Name: given_name
+            Required: true
+            AttributeDataType: String
+          - Name: address
+            Required: true
+            AttributeDataType: String
+          - Name: gender
+            Required: true
+            AttributeDataType: String
+        AdminCreateUserConfig:
+          AllowAdminCreateUserOnly: false
+
+    MyUserByUsingServerlessClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: my-cognito-service-dev
+        UserPoolId:
+          Ref: MyUserByUsingServerless
+        ExplicitAuthFlows:
+          - ALLOW_USER_PASSWORD_AUTH
+          - ALLOW_REFRESH_TOKEN_AUTH
+        GenerateSecret: false
 
     # resources: # CloudFormation template syntax from here on.
     #   Resources:

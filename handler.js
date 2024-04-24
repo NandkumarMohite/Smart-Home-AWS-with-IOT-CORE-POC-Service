@@ -11,6 +11,7 @@ const paramsCertificate = {
 };
 const device = new AWS.IotData(paramsCertificate);
 const docClient = new AWS.DynamoDB.DocumentClient();
+const cloudformation = new AWS.CloudFormation();
 module.exports.registerUser = async (event) => {
     const { username, email, address, gender, given_name, password } = JSON.parse(event.body);
 
@@ -21,9 +22,31 @@ module.exports.registerUser = async (event) => {
         };
     }
     try {
-        // Define parameters for user sign-up
+        const YOUR_USER_POOL_IDPRAM = {
+            UserPoolId: 'YOUR_USER_POOL_ID' // Replace with your actual user pool ID
+        };
+        const response = await cognitoIdentityServiceProvider.listUserPoolClients(YOUR_USER_POOL_IDPRAM).promise();
+        if (response.UserPoolClients.length > 0) {
+            // return {
+            //     statusCode: 200,
+            //     body: JSON.stringify({ clientId: response.UserPoolClients[0].ClientId })
+            // };
+            console.log("ClientId", response.UserPoolClients[0].ClientId)
+        } else {
+            return {
+                statusCode: 404,
+                body: JSON.stringify({ message: 'No app clients found' })
+            };
+        }
+    } catch (err) {
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ message: 'Internal Server Error' })
+        };
+    }
+
         const signUpParams = {
-            ClientId: '6b3lajqibgc496m0f9f4qgs8oc', // Specify your Cognito User Pool Client ID
+            ClientId: '4bibt2acj6lniph0ufutm7i1au', // Specify your Cognito User Pool Client ID
             Username: username,
             Password: password,
             UserAttributes: [
@@ -142,7 +165,7 @@ async function addThingGroupForUser(UserSub) {
     }
 
 }
-module.exports.publishSensorSignalToIoT = async (event) => {
+module.exports.publishSensorSignalToMQQT = async (event) => {
     const body = JSON.parse(event.body);
     const { userId, message } = body;
     const thingGroupName = `Home_${userId}`;
@@ -202,7 +225,7 @@ module.exports.publishSensorSignalToIoT = async (event) => {
     }
 };
 
-module.exports.subscribeTheMotionSensorForMQQT = async (event) => {
+module.exports.subscribeTheMotionSensorFromMQQT = async (event) => {
     try {
         // Check if event.Records is undefined or empty
         console.log("event", event);
@@ -222,7 +245,7 @@ module.exports.subscribeTheMotionSensorForMQQT = async (event) => {
         if (myMessageAndUseID[0] == "motion_detected") {
             // Publish MQTT message to turn on the light bulb
             console.log("Inside if statement");
-            await publishLightBulbSignalToIoT('LightBulb_ON', myMessageAndUseID[1]);
+            await publishLightBulbSignalToMQQT('LightBulb_ON', myMessageAndUseID[1]);
         }
 
         console.log("publishToLightBulb successfull");
@@ -240,7 +263,7 @@ module.exports.subscribeTheMotionSensorForMQQT = async (event) => {
     }
 };
 
-async function publishLightBulbSignalToIoT(message, userId) {
+async function publishLightBulbSignalToMQQT(message, userId) {
     const thingGroupName = `Home_${userId}`;
     const thingName = "LightBulb"; // Assuming all things are motion sensors
 
