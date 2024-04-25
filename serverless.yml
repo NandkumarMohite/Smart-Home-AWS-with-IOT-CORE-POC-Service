@@ -143,6 +143,7 @@ provider:
     - Effect: Allow
       Action:
         - cognito-idp:ListUserPoolClients
+        - cognito-idp:AdminGetUser        
       Resource: "arn:aws:cognito-idp:us-east-1:730335246533:userpool/*"
     - Effect: Allow
       Action:
@@ -151,6 +152,12 @@ provider:
         - iot:AddThingToThingGroup
         - iot:Publish
       Resource: "*"
+    - Effect: Allow
+      Action:
+        - ses:VerifyEmailIdentity
+        - "ses:SendEmail"
+        - "ses:SendRawEmail"        
+      Resource: "*"      
     - Effect: Allow
       Action: 
         - cloudformation:DescribeStacks
@@ -174,7 +181,12 @@ functions:
     handler: handler.subscribeTheMotionSensorFromMQQT
     events:
       - iot:
-          sql: "SELECT * FROM 'home/groups/+/things/MotionSensor/status'"          
+          sql: "SELECT * FROM 'home/groups/+/things/MotionSensor/status'"   
+  subscribeTheLightBulbFromMQQT:
+    handler: handler.subscribeTheLightBulbFromMQQT
+    events:
+      - iot:
+          sql: "SELECT * FROM 'home/groups/+/things/LightBulb/status'"        
 resources:
   Resources:
     UserHomeThingGroupData:
@@ -234,22 +246,6 @@ resources:
         ExplicitAuthFlows:
           - ALLOW_USER_PASSWORD_AUTH
           - ALLOW_REFRESH_TOKEN_AUTH
-        GenerateSecret: false
-
-    # resources: # CloudFormation template syntax from here on.
-    #   Resources:
-    #     usersTable:
-    #       Type: AWS::DynamoDB::Table
-    #       Properties:
-    #         TableName: usersTable
-    #         AttributeDefinitions:
-    #           - AttributeName: email
-    #             AttributeType: S
-    #         KeySchema:
-    #           - AttributeName: email
-    #             KeyType: HASH
-    #         ProvisionedThroughput:
-    #           ReadCapacityUnits: 1
-    #           WriteCapacityUnits: 1                     
+        GenerateSecret: false                        
 plugins:
   - serverless-offline # for local testing

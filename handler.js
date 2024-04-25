@@ -1,7 +1,9 @@
 const AWS = require('aws-sdk');
+// const axios = require('axios');
 const cognitoIdentityServiceProvider = new AWS.CognitoIdentityServiceProvider();
 const fs = require('fs')
 const iot = new AWS.Iot();
+const ses = new AWS.SES();
 const paramsCertificate = {
     keyPath: "./certificates/private-key.pem.key",
     certPath: "./certificates/certificate.pem.crt",
@@ -42,6 +44,7 @@ module.exports.registerUser = async (event) => {
 
         const data = await cognitoIdentityServiceProvider.signUp(signUpParams).promise();
         await addThingGroupForUser(data.UserSub);
+        await verifyEmailAddress(email);
 
         return {
             statusCode: 200,
@@ -64,6 +67,18 @@ module.exports.registerUser = async (event) => {
         };
     }
 };
+
+async function verifyEmailAddress(email) {
+    try {
+        const params = {
+            EmailAddress: email
+        };
+        await ses.verifyEmailIdentity(params).promise();
+    } catch (error) {
+        console.error('Error verifying email address:', error);
+        throw new Error('Failed to verify email address.');
+    }
+}
 
 async function addThingGroupForUser(UserSub) {
     const userId = UserSub; // You need to pass the userId from Cognito
@@ -147,6 +162,7 @@ async function addThingGroupForUser(UserSub) {
     }
 
 }
+
 module.exports.publishSensorSignalToMQQT = async (event) => {
     const body = JSON.parse(event.body);
     const { userId, message } = body;
@@ -294,5 +310,90 @@ async function publishLightBulbSignalToMQQT(message, userId) {
         return {
             body: JSON.stringify({ message: 'Error publishing message' })
         };
+    }
+}
+
+module.exports.subscribeTheLightBulbFromMQQT = async (event) => {
+    try {
+        // Check if event.Records is undefined or empty
+        console.log("event", event);
+        if (!event || !event.message || !event.userId) {
+            console.error('Invalid event data');
+            return {
+                statusCode: 400,
+                body: JSON.stringify('Invalid event data')
+            };
+        }
+        
+        const { message, userId } = event;
+
+        // Check if motion is detected
+        if (message === "LightBulb_ON") {
+            // Get user email from Cognito
+            const email = await getUserEmail(userId);
+            if (!email) {
+                console.error('User email not found');
+                return {
+                    statusCode: 404,
+                    body: JSON.stringify('User email not found')
+                };
+            }
+            
+            // Send email
+            await sendEmail(email);
+        }
+
+        console.log("SubscriptionToLightBulb successful");
+        return {
+            statusCode: 200,
+            body: JSON.stringify('Motion processed successfully')
+        };
+    } catch (error) {
+        console.error('Error processing motion:', error);
+        return {
+            statusCode: 500,
+            body: JSON.stringify('Error processing motion')
+        };
+    } 
+}
+
+async function getUserEmail(userId) {
+    try {
+        const params = {
+            UserPoolId: 'us-east-1_S2Ke4L7mu',
+            Username: userId
+        };
+        const user = await cognitoIdentityServiceProvider.adminGetUser(params).promise();
+        const email = user.UserAttributes.find(attr => attr.Name === 'email');
+        return email ? email.Value : null;
+    } catch (error) {
+        console.error('Error fetching user email:', error);
+        throw error;
+    }
+}
+
+async function sendEmail(email) {
+    try {
+        const params = {
+            Destination: {
+                ToAddresses: [email]
+            },
+            Message: {
+                Body: {
+                    Text: {
+                        Data: 'The light bulb is now ON.'
+                    }
+                },
+                Subject: {
+                    Data: 'Light Bulb Status Notification'
+                }
+            },
+            Source: 'rajpajob@gmail.com'
+        };
+        await ses.sendEmail(params).promise();
+        console.log('Email sent successfully');
+    } catch (error) {
+        console.error('Error sending email:', error);
+        throw error;
     }
 }
