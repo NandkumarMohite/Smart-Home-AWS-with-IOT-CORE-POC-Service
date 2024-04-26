@@ -24,10 +24,8 @@ module.exports.registerUser = async (event) => {
         };
     }
     try {
-        const CognitoParams = {
-            UserPoolId: 'us-east-1_S2Ke4L7mu' // Replace with your actual user pool ID
-        };
-        const response = await cognitoIdentityServiceProvider.listUserPoolClients(CognitoParams).promise();
+
+        const response = await listoutUsersPoolClienId();
         console.log("ClientId", response.UserPoolClients[0].ClientId);
         const signUpParams = {
             ClientId: response.UserPoolClients[0].ClientId, // Specify your Cognito User Pool Client ID
@@ -45,6 +43,7 @@ module.exports.registerUser = async (event) => {
         const data = await cognitoIdentityServiceProvider.signUp(signUpParams).promise();
         await addThingGroupForUser(data.UserSub);
         await verifyEmailAddress(email);
+        await registerUserInDynamo(data.UserSub,{ username, email, address, gender, given_name, password });
 
         return {
             statusCode: 200,
@@ -163,6 +162,22 @@ async function addThingGroupForUser(UserSub) {
 
 }
 
+async function registerUserInDynamo(userid,data) {
+    const dynamoParams = {
+        TableName: 'UserHomeThingGroupData',
+        Item: {
+            userId: userid,
+            MotionSensor: "Motion_not_detected",
+            LightBulb: "OFF",
+            email: data.email,
+            isUserOnHoliday:  false
+        }
+    };
+
+    await docClient.put(dynamoParams).promise();
+
+}
+
 module.exports.publishSensorSignalToMQQT = async (event) => {
     const body = JSON.parse(event.body);
     const { userId, message } = body;
@@ -184,31 +199,9 @@ module.exports.publishSensorSignalToMQQT = async (event) => {
     console.log("device", device);
     try {
         await device.publish(params).promise();
-        const queryParams = {
-            TableName: 'UserHomeThingGroupData',
-            Key: {
-                'userId': userId,
-            },
-        };
-
-        // Perform the GetItem operation
-        const scanedData = await docClient.get(queryParams).promise();
+        const scanedData = await getUserDataFromDynamo(userId);
         console.log("scanedData", scanedData);
-        //   console.log("scanedData.Item.LightBulb", scanedData.Item.LightBulb);
-        let updateLightBulb = "OFF";
-        (scanedData.Item?.LightBulb == "ON") ? updateLightBulb = "ON" : updateLightBulb = "OFF";
-
-        const dynamoParams = {
-            TableName: 'UserHomeThingGroupData',
-            Item: {
-                userId: userId,
-                MotionSensor: message,
-                LightBulb: updateLightBulb,
-                isUserOnHoliday: false
-            }
-        };
-
-        await docClient.put(dynamoParams).promise();
+        await putDataIntoDynamoDb(scanedData,message);
 
         return {
             statusCode: 200,
@@ -236,14 +229,16 @@ module.exports.subscribeTheMotionSensorFromMQQT = async (event) => {
         }
         // Extract message from the incoming MQTT event
         const data = event.message;
-        // const data = event.toString();
         console.log("DATA", data);
         const myMessageAndUseID = data.split("+")
         // Check if motion is detected
         if (myMessageAndUseID[0] == "motion_detected") {
-            // Publish MQTT message to turn on the light bulb
-            console.log("Inside if statement");
-            await publishLightBulbSignalToMQQT('LightBulb_ON', myMessageAndUseID[1]);
+            const scanedData = await getUserDataFromDynamo(myMessageAndUseID[1]);
+            (scanedData.Item?.isUserOnHoliday == true) 
+            ? await holidayChackMethod(scanedData.Item?.email,myMessageAndUseID[1]) 
+            : await publishLightBulbSignalToMQQT('LightBulb_ON', myMessageAndUseID[1]);
+        } else{
+            await publishLightBulbSignalToMQQT('LightBulb_OFF', myMessageAndUseID[1]);
         }
 
         console.log("publishToLightBulb successfull");
@@ -260,7 +255,30 @@ module.exports.subscribeTheMotionSensorFromMQQT = async (event) => {
         };
     }
 };
+async function holidayChackMethod(email,userId) {
+try{
+    const dynamoParams = {
+        TableName: 'UserHomeThingGroupData',
+        Item: {
+            userId: userId,
+            MotionSensor: "Motion_Detected_when_you_are_on_Holiday",
+            LightBulb: "OFF",
+            email: email,
+            isUserOnHoliday: true
+        }
+    };
 
+    await docClient.put(dynamoParams).promise();
+    await sendEmail(email, "Hi Sir, You are on Holiday and some motion is detected in home Thank you sir!", "Motion Detected when you are on Holiday");
+
+} catch (err) {
+    console.error('Error publishing data in DB:', err);
+    return {
+        body: JSON.stringify({ message: 'Error publishing data in DB' })
+    };
+}
+
+}
 async function publishLightBulbSignalToMQQT(message, userId) {
     const thingGroupName = `Home_${userId}`;
     const thingName = "LightBulb"; // Assuming all things are motion sensors
@@ -279,27 +297,16 @@ async function publishLightBulbSignalToMQQT(message, userId) {
     try {
         await device.publish(params).promise();
         console.log('Message published successfully to motion Light Bulb');
-        const queryParams = {
-            TableName: 'UserHomeThingGroupData',
-            Key: {
-                'userId': userId,
-            },
-        };
-
         // Perform the GetItem operation
-        const scanedData = await docClient.get(queryParams).promise();
-        console.log("scanedData", scanedData);
-        //   console.log("scanedData.Item.LightBulb", scanedData.Item.LightBulb);
-        let updateMesage = "motion_not_detected";
-        (scanedData.Item?.MotionSensor == "motion_detected") ? updateMesage = "motion_detected" : updateMesage = "motion_not_detected";
-
+        const scanedData = await getUserDataFromDynamo(userId);
         const dynamoParams = {
             TableName: 'UserHomeThingGroupData',
             Item: {
                 userId: userId,
-                MotionSensor: updateMesage,
-                LightBulb: "ON",
-                isUserOnHoliday: false
+                MotionSensor: (scanedData.Item?.MotionSensor == "motion_detected") ?  "motion_detected" : "motion_not_detected",
+                email: scanedData.Item?.email,
+                LightBulb: (message == "LightBulb_ON") ? "ON": "OFF",
+                isUserOnHoliday: scanedData.Item?.isUserOnHoliday
             }
         };
 
@@ -340,7 +347,7 @@ module.exports.subscribeTheLightBulbFromMQQT = async (event) => {
             }
             
             // Send email
-            await sendEmail(email);
+            await sendEmail(email, "The light bulb is now ON.", "Light Bulb Status Notification");
         }
 
         console.log("SubscriptionToLightBulb successful");
@@ -372,7 +379,7 @@ async function getUserEmail(userId) {
     }
 }
 
-async function sendEmail(email) {
+async function sendEmail(email, data, subjectData) {
     try {
         const params = {
             Destination: {
@@ -381,11 +388,11 @@ async function sendEmail(email) {
             Message: {
                 Body: {
                     Text: {
-                        Data: 'The light bulb is now ON.'
+                        Data: data
                     }
                 },
                 Subject: {
-                    Data: 'Light Bulb Status Notification'
+                    Data: subjectData
                 }
             },
             Source: 'rajpajob@gmail.com'
@@ -396,4 +403,101 @@ async function sendEmail(email) {
         console.error('Error sending email:', error);
         throw error;
     }
+}
+
+module.exports.loginUsingCognito = async (event) => {
+    const { username, password } = JSON.parse(event.body);
+    const response = await listoutUsersPoolClienId();
+    console.log("ClientId", response.UserPoolClients[0].ClientId);
+    try {
+        const params = {
+            AuthFlow: 'USER_PASSWORD_AUTH',
+            ClientId: response.UserPoolClients[0].ClientId,
+            AuthParameters: {
+                USERNAME: username,
+                PASSWORD: password,
+            },
+        };
+
+        const data = await cognitoIdentityServiceProvider.initiateAuth(params).promise();
+
+        return {
+            statusCode: 200,
+            body: JSON.stringify(data.UserSub),
+        };
+    } catch (err) {
+        return {
+            statusCode: 401,
+            body: JSON.stringify({ message: err.message }),
+        };
+    }
+};
+
+module.exports.goingForHoliday = async (event) => {
+    const { userId } = JSON.parse(event.body);
+
+    // const userId = await findUserNameFromEmail(email);
+    const queryParams = {
+        TableName: 'UserHomeThingGroupData',
+        Key: {
+            'userId': userId,
+        },
+    };
+
+    // Perform the GetItem operation
+    const scanedData = await docClient.get(queryParams).promise();
+    const dynamoParams = {
+        TableName: 'UserHomeThingGroupData',
+        Item: {
+            userId: userId,
+            MotionSensor: (scanedData.Item?.MotionSensor == "ON") ? "ON": "OFF",
+            LightBulb: (scanedData.Item?.LightBulb == "ON") ? "ON": "OFF",
+            email: scanedData.Item?.email,
+            isUserOnHoliday: true
+        }
+    };
+
+    await docClient.put(dynamoParams).promise();
+
+    return {
+        statusCode: 200,
+        body: JSON.stringify({ message: 'Holiday Update Complete'})
+    };
+
+};
+
+async function listoutUsersPoolClienId() {
+    const CognitoParams = {
+        UserPoolId: 'us-east-1_S2Ke4L7mu' // Replace with your actual user pool ID
+    };
+    const response = await cognitoIdentityServiceProvider.listUserPoolClients(CognitoParams).promise();
+    console.log("ClientId", response.UserPoolClients[0].ClientId);
+    return response;
+}
+
+async function getUserDataFromDynamo(userId) {
+    const queryParams = {
+        TableName: 'UserHomeThingGroupData',
+        Key: {
+            'userId': userId,
+        },
+    };
+
+    // Perform the GetItem operation
+    const scanedData = await docClient.get(queryParams).promise();
+    return scanedData;
+}
+
+async function putDataIntoDynamoDb(scanedData,message) {
+    const dynamoParams = {
+        TableName: 'UserHomeThingGroupData',
+        Item: {
+            userId: scanedData.Item?.userId,
+            MotionSensor: message,
+            LightBulb: (scanedData.Item?.LightBulb == "ON") ?  "ON" : "OFF",
+            email: scanedData.Item?.email,
+            isUserOnHoliday: (scanedData.Item?.isUserOnHoliday == true) ? true : false
+        }
+    };
+    await docClient.put(dynamoParams).promise();
 }

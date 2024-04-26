@@ -143,7 +143,8 @@ provider:
     - Effect: Allow
       Action:
         - cognito-idp:ListUserPoolClients
-        - cognito-idp:AdminGetUser        
+        - cognito-idp:AdminGetUser
+        - cognito-idp:initiateAuth        
       Resource: "arn:aws:cognito-idp:us-east-1:730335246533:userpool/*"
     - Effect: Allow
       Action:
@@ -186,7 +187,23 @@ functions:
     handler: handler.subscribeTheLightBulbFromMQQT
     events:
       - iot:
-          sql: "SELECT * FROM 'home/groups/+/things/LightBulb/status'"        
+          sql: "SELECT * FROM 'home/groups/+/things/LightBulb/status'"  
+
+  loginUsingCognito:
+    handler: handler.loginUsingCognito
+    events:
+      - http:
+          path: signIn
+          method: post
+          # cors: true
+  goingForHoliday:
+    handler: handler.goingForHoliday
+    events:
+      - http:
+          path: holiday
+          method: post
+          # cors: true          
+
 resources:
   Resources:
     UserHomeThingGroupData:
@@ -246,6 +263,7 @@ resources:
         ExplicitAuthFlows:
           - ALLOW_USER_PASSWORD_AUTH
           - ALLOW_REFRESH_TOKEN_AUTH
-        GenerateSecret: false                        
+        GenerateSecret: false
+                                  
 plugins:
   - serverless-offline # for local testing
