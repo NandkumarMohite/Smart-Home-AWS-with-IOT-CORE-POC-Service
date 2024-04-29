@@ -1,5 +1,7 @@
 const AWS = require('aws-sdk');
+const { httpError, httpResponse } = require('./responseUtil');
 // const axios = require('axios');
+
 const cognitoIdentityServiceProvider = new AWS.CognitoIdentityServiceProvider();
 const fs = require('fs')
 const iot = new AWS.Iot();
@@ -44,11 +46,7 @@ module.exports.registerUser = async (event) => {
         await addThingGroupForUser(data.UserSub);
         await verifyEmailAddress(email);
         await registerUserInDynamo(data.UserSub,{ username, email, address, gender, given_name, password });
-
-        return {
-            statusCode: 200,
-            body: JSON.stringify({ message: 'User registered successfully.', data })
-        };
+        return httpResponse(200, {data: data} )
     } catch (error) {
         console.error('Error registering user:', error);
 
@@ -59,11 +57,7 @@ module.exports.registerUser = async (event) => {
         } else if (error.code === 'InvalidParameterException') {
             errorMessage = 'Invalid parameter provided. Please check your input.';
         }
-
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ message: errorMessage })
-        };
+        return httpError(500, {message:errorMessage})
     }
 };
 
@@ -94,7 +88,7 @@ async function addThingGroupForUser(UserSub) {
 
         // Create thing for light bulb
         const lightBulbParams = {
-            thingName: `LightBulb`
+            thingName: `LightBulb_${userId}`
         };
         try {
             // Attempt to create the thing
@@ -121,7 +115,7 @@ async function addThingGroupForUser(UserSub) {
 
         // Create thing for motion sensor
         const motionSensorParams = {
-            thingName: `MotionSensor`
+            thingName: `MotionSensor_${userId}`
         };
 
         try {
@@ -147,17 +141,19 @@ async function addThingGroupForUser(UserSub) {
         await iot.addThingToThingGroup(motionSensorGroupParams).promise();
         console.log("Motion sensor thing added to home group successfully:", motionSensorGroupParams);
 
-        return {
-            statusCode: 200,
-            body: JSON.stringify({ message: 'Things and group created successfully' })
-        };
+        // return {
+        //     statusCode: 200,
+        //     body: JSON.stringify({ message: 'Things and group created successfully' })
+        // };
+        return httpError(200, { message: 'Things and group created successfully' });
     } catch (error) {
         console.error("Error creating things and group:", error);
 
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ message: 'Error creating things and group', error: error })
-        };
+        // return {
+        //     statusCode: 500,
+        //     body: JSON.stringify({ message: 'Error creating things and group', error: error })
+        // };
+        return httpError(500,{ message: 'Error creating things and group', error: error });
     }
 
 }
@@ -203,16 +199,19 @@ module.exports.publishSensorSignalToMQQT = async (event) => {
         console.log("scanedData", scanedData);
         await putDataIntoDynamoDb(scanedData,message);
 
-        return {
-            statusCode: 200,
-            body: JSON.stringify({ message: 'Message published successfully to motion Sensor' })
-        };
+        // return {
+        //     statusCode: 200,
+        //     body: JSON.stringify({ message: 'Message published successfully to motion Sensor' })
+        // };
+        return httpResponse(200, { message: 'Message published successfully to motion Sensor' })
     } catch (err) {
         console.error('Error publishing message:', err);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ message: 'Error publishing message' })
-        };
+        // return {
+        //     statusCode: 500,
+        //     body: JSON.stringify({ message: 'Error publishing message' })
+        // };
+        return httpError(500, { message: 'Error publishing message' })
+
     }
 };
 
@@ -367,7 +366,7 @@ module.exports.subscribeTheLightBulbFromMQQT = async (event) => {
 async function getUserEmail(userId) {
     try {
         const params = {
-            UserPoolId: 'us-east-1_S2Ke4L7mu',
+            UserPoolId: 'us-east-1_akwkFcl3R',
             Username: userId
         };
         const user = await cognitoIdentityServiceProvider.adminGetUser(params).promise();
@@ -418,18 +417,19 @@ module.exports.loginUsingCognito = async (event) => {
                 PASSWORD: password,
             },
         };
+        const adminPram = {
+            UserPoolId: 'us-east-1_akwkFcl3R',
+            Username: username
+        };
 
         const data = await cognitoIdentityServiceProvider.initiateAuth(params).promise();
 
-        return {
-            statusCode: 200,
-            body: JSON.stringify(data.UserSub),
-        };
+        const dataUserID = await cognitoIdentityServiceProvider.adminGetUser(adminPram).promise();
+        userId = dataUserID.UserAttributes.find(attr => attr.Name === 'sub').Value;
+
+        return httpResponse(200, { data: {userMainData: data, userId: userId}});
     } catch (err) {
-        return {
-            statusCode: 401,
-            body: JSON.stringify({ message: err.message }),
-        };
+        return httpError(401,{message: err.message })
     }
 };
 
@@ -458,17 +458,12 @@ module.exports.goingForHoliday = async (event) => {
     };
 
     await docClient.put(dynamoParams).promise();
-
-    return {
-        statusCode: 200,
-        body: JSON.stringify({ message: 'Holiday Update Complete'})
-    };
-
+    return httpResponse(200, { message: 'Holiday Update Complete'});
 };
 
 async function listoutUsersPoolClienId() {
     const CognitoParams = {
-        UserPoolId: 'us-east-1_S2Ke4L7mu' // Replace with your actual user pool ID
+        UserPoolId: 'us-east-1_akwkFcl3R' // Replace with your actual user pool ID
     };
     const response = await cognitoIdentityServiceProvider.listUserPoolClients(CognitoParams).promise();
     console.log("ClientId", response.UserPoolClients[0].ClientId);

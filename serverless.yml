@@ -172,22 +172,26 @@ functions:
           path: register
           method: post
           cors: true
+
   publishSensorSignalToMQQT:
     handler: handler.publishSensorSignalToMQQT
     events:
       - http:
           path: publish-to-iot
           method: post
+          cors: true
+
   subscribeTheMotionSensorFromMQQT:
     handler: handler.subscribeTheMotionSensorFromMQQT
     events:
       - iot:
-          sql: "SELECT * FROM 'home/groups/+/things/MotionSensor/status'"   
+          sql: "SELECT * FROM 'home/groups/+/things/+/status'"   
+
   subscribeTheLightBulbFromMQQT:
     handler: handler.subscribeTheLightBulbFromMQQT
     events:
       - iot:
-          sql: "SELECT * FROM 'home/groups/+/things/LightBulb/status'"  
+          sql: "SELECT * FROM 'home/groups/+/things/+/status'"  
 
   loginUsingCognito:
     handler: handler.loginUsingCognito
@@ -195,14 +199,15 @@ functions:
       - http:
           path: signIn
           method: post
-          # cors: true
+          cors: true
+          
   goingForHoliday:
     handler: handler.goingForHoliday
     events:
       - http:
           path: holiday
           method: post
-          # cors: true          
+          cors: true          
 
 resources:
   Resources:
