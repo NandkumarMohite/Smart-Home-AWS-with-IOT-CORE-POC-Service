@@ -453,12 +453,12 @@ module.exports.goingForHoliday = async (event) => {
             MotionSensor: (scanedData.Item?.MotionSensor == "ON") ? "ON": "OFF",
             LightBulb: (scanedData.Item?.LightBulb == "ON") ? "ON": "OFF",
             email: scanedData.Item?.email,
-            isUserOnHoliday: true
+            isUserOnHoliday: (scanedData.Item?.isUserOnHoliday == true )? false : true
         }
     };
 
     await docClient.put(dynamoParams).promise();
-    return httpResponse(200, { message: 'Holiday Update Complete'});
+    return httpResponse(200, { message: (scanedData.Item?.isUserOnHoliday == true )? "Status Updated as you are coming back from Holiday" : "Status Updated as you are going on Holiday"});
 };
 
 async function listoutUsersPoolClienId() {
