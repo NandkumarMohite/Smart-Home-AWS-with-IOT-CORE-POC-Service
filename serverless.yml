@@ -185,13 +185,13 @@ functions:
     handler: handler.subscribeTheMotionSensorFromMQQT
     events:
       - iot:
-          sql: "SELECT * FROM 'home/groups/+/things/+/status'"   
+          sql: "SELECT * FROM 'home/groups/+/things/+/statusOfMotion'"   
 
   subscribeTheLightBulbFromMQQT:
     handler: handler.subscribeTheLightBulbFromMQQT
     events:
       - iot:
-          sql: "SELECT * FROM 'home/groups/+/things/+/status'"  
+          sql: "SELECT * FROM 'home/groups/+/things/+/statusOfLight'"  
 
   loginUsingCognito:
     handler: handler.loginUsingCognito
@@ -200,7 +200,7 @@ functions:
           path: signIn
           method: post
           cors: true
-          
+
   goingForHoliday:
     handler: handler.goingForHoliday
     events:
@@ -224,6 +224,20 @@ resources:
         ProvisionedThroughput:
           ReadCapacityUnits: 5
           WriteCapacityUnits: 5
+  Resources:
+    UserAndThingData:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: UserAndThingData
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S             
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5          
 
     MyUserByUsingServerless:
       Type: AWS::Cognito::UserPool

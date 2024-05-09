@@ -30,7 +30,7 @@ module.exports.registerUser = async (event) => {
         const response = await listoutUsersPoolClienId();
         console.log("ClientId", response.UserPoolClients[0].ClientId);
         const signUpParams = {
-            ClientId: response.UserPoolClients[0].ClientId, // Specify your Cognito User Pool Client ID
+            ClientId: response.UserPoolClients[0].ClientId, 
             Username: username,
             Password: password,
             UserAttributes: [
@@ -43,9 +43,9 @@ module.exports.registerUser = async (event) => {
         };
 
         const data = await cognitoIdentityServiceProvider.signUp(signUpParams).promise();
-        await addThingGroupForUser(data.UserSub);
+        let motionSensorArray = await addThingGroupForUser(data.UserSub);
         await verifyEmailAddress(email);
-        await registerUserInDynamo(data.UserSub,{ username, email, address, gender, given_name, password });
+        await registerUserInDynamo(data.UserSub,{ username, email, address, gender, given_name, password }, motionSensorArray);
         return httpResponse(200, {data: data} )
     } catch (error) {
         console.error('Error registering user:', error);
@@ -74,9 +74,8 @@ async function verifyEmailAddress(email) {
 }
 
 async function addThingGroupForUser(UserSub) {
-    const userId = UserSub; // You need to pass the userId from Cognito
+    const userId = UserSub;
     try {
-        // Create thing group for the user's home
         const params = {
             thingGroupName: `Home_${userId}`,
             thingGroupProperties: {
@@ -86,79 +85,55 @@ async function addThingGroupForUser(UserSub) {
         await iot.createThingGroup(params).promise();
         console.log("Thing group for user's home created successfully:", params);
 
-        // Create thing for light bulb
         const lightBulbParams = {
             thingName: `LightBulb_${userId}`
         };
         try {
-            // Attempt to create the thing
             const lightBulbData = await iot.createThing(lightBulbParams).promise();
             console.log('New light bulb created:', lightBulbData);
         } catch (err) {
-            // If the thing already exists, handle the error
             if (err.code === 'ResourceAlreadyExistsException') {
-                // Your logic here for handling the case where the thing already exists
                 console.log('Light bulb already exists. Your logic here...');
             } else {
-                // Handle other errors
                 console.error('Error creating light bulb:', err);
             }
         }
-
-        // Add the light bulb thing to the home thing group
         const lightBulbGroupParams = {
             thingGroupName: `Home_${userId}`,
             thingName: lightBulbParams.thingName
         };
         await iot.addThingToThingGroup(lightBulbGroupParams).promise();
         console.log("Light bulb thing added to home group successfully:", lightBulbGroupParams);
-
-        // Create thing for motion sensor
         const motionSensorParams = {
             thingName: `MotionSensor_${userId}`
         };
 
         try {
-            // Attempt to create the thing
             const motionSensorData = await iot.createThing(motionSensorParams).promise();
             console.log("Motion sensor thing created successfully:", motionSensorData);
         } catch (err) {
-            // If the thing already exists, handle the error
             if (err.code === 'ResourceAlreadyExistsException') {
-                // Your logic here for handling the case where the thing already exists
                 console.log('Sensor already exists. Your logic here...');
             } else {
-                // Handle other errors
                 console.error('Error creating motion sensor:', err);
             }
         }
 
-        // Add the motion sensor thing to the home thing group
         const motionSensorGroupParams = {
             thingGroupName: `Home_${userId}`,
             thingName: motionSensorParams.thingName
         };
         await iot.addThingToThingGroup(motionSensorGroupParams).promise();
         console.log("Motion sensor thing added to home group successfully:", motionSensorGroupParams);
-
-        // return {
-        //     statusCode: 200,
-        //     body: JSON.stringify({ message: 'Things and group created successfully' })
-        // };
-        return httpError(200, { message: 'Things and group created successfully' });
+        return [lightBulbGroupParams,motionSensorGroupParams];
     } catch (error) {
         console.error("Error creating things and group:", error);
-
-        // return {
-        //     statusCode: 500,
-        //     body: JSON.stringify({ message: 'Error creating things and group', error: error })
-        // };
         return httpError(500,{ message: 'Error creating things and group', error: error });
     }
 
 }
 
-async function registerUserInDynamo(userid,data) {
+async function registerUserInDynamo(userid,data,motionSensorArray) {
     const dynamoParams = {
         TableName: 'UserHomeThingGroupData',
         Item: {
@@ -166,11 +141,20 @@ async function registerUserInDynamo(userid,data) {
             MotionSensor: "Motion_not_detected",
             LightBulb: "OFF",
             email: data.email,
-            isUserOnHoliday:  false
+            isUserOnHoliday:  false,
         }
     };
 
+    const dynamoParamsForThing = {
+        TableName: 'UserAndThingData',
+        Item: {
+            userid: userid,
+            motionSensor: motionSensorArray[1].thingName,
+            lightBulb: motionSensorArray[0].thingName
+        }
+    }
     await docClient.put(dynamoParams).promise();
+    await docClient.put(dynamoParamsForThing).promise();
 
 }
 
@@ -178,10 +162,8 @@ module.exports.publishSensorSignalToMQQT = async (event) => {
     const body = JSON.parse(event.body);
     const { userId, message } = body;
     const thingGroupName = `Home_${userId}`;
-    const thingName = "MotionSensor"; // Assuming all things are motion sensors
-
-    // Define sensor data and topic prefix
-    const sensorData = "status";
+    const thingName = `MotionSensor_${userId}`; 
+    const sensorData = "statusOfMotion";
     const topicPrefix = `home/groups/${thingGroupName}/things`;
 
     const topic = `${topicPrefix}/${thingName}/${sensorData}`;
@@ -198,18 +180,9 @@ module.exports.publishSensorSignalToMQQT = async (event) => {
         const scanedData = await getUserDataFromDynamo(userId);
         console.log("scanedData", scanedData);
         await putDataIntoDynamoDb(scanedData,message);
-
-        // return {
-        //     statusCode: 200,
-        //     body: JSON.stringify({ message: 'Message published successfully to motion Sensor' })
-        // };
         return httpResponse(200, { message: 'Message published successfully to motion Sensor' })
     } catch (err) {
         console.error('Error publishing message:', err);
-        // return {
-        //     statusCode: 500,
-        //     body: JSON.stringify({ message: 'Error publishing message' })
-        // };
         return httpError(500, { message: 'Error publishing message' })
 
     }
@@ -217,7 +190,6 @@ module.exports.publishSensorSignalToMQQT = async (event) => {
 
 module.exports.subscribeTheMotionSensorFromMQQT = async (event) => {
     try {
-        // Check if event.Records is undefined or empty
         console.log("event", event);
         if (event == undefined || event == null || event == {}) {
             console.error('No records found in the event');
@@ -226,11 +198,9 @@ module.exports.subscribeTheMotionSensorFromMQQT = async (event) => {
                 body: JSON.stringify('No records found in the event')
             };
         }
-        // Extract message from the incoming MQTT event
         const data = event.message;
         console.log("DATA", data);
         const myMessageAndUseID = data.split("+")
-        // Check if motion is detected
         if (myMessageAndUseID[0] == "motion_detected") {
             const scanedData = await getUserDataFromDynamo(myMessageAndUseID[1]);
             (scanedData.Item?.isUserOnHoliday == true) 
@@ -280,23 +250,20 @@ try{
 }
 async function publishLightBulbSignalToMQQT(message, userId) {
     const thingGroupName = `Home_${userId}`;
-    const thingName = "LightBulb"; // Assuming all things are motion sensors
-
-    // Define sensor data and topic prefix
-    const sensorData = "status";
+    const thingName = `LightBulb_${userId}`; 
+    const sensorData = "statusOfLight";
     const topicPrefix = `home/groups/${thingGroupName}/things`;
 
     const topic = `${topicPrefix}/${thingName}/${sensorData}`;
     console.log("topic", topic);
     const params = {
-        topic: topic, // Replace 'light-bulb-topic' with the MQTT topic your light bulb is subscribed to
+        topic: topic, 
         payload: JSON.stringify({ message, userId }),
-        qos: 1 // Quality of Service level
+        qos: 1 
     };
     try {
         await device.publish(params).promise();
         console.log('Message published successfully to motion Light Bulb');
-        // Perform the GetItem operation
         const scanedData = await getUserDataFromDynamo(userId);
         const dynamoParams = {
             TableName: 'UserHomeThingGroupData',
@@ -321,7 +288,6 @@ async function publishLightBulbSignalToMQQT(message, userId) {
 
 module.exports.subscribeTheLightBulbFromMQQT = async (event) => {
     try {
-        // Check if event.Records is undefined or empty
         console.log("event", event);
         if (!event || !event.message || !event.userId) {
             console.error('Invalid event data');
@@ -332,10 +298,7 @@ module.exports.subscribeTheLightBulbFromMQQT = async (event) => {
         }
         
         const { message, userId } = event;
-
-        // Check if motion is detected
         if (message === "LightBulb_ON") {
-            // Get user email from Cognito
             const email = await getUserEmail(userId);
             if (!email) {
                 console.error('User email not found');
@@ -345,7 +308,6 @@ module.exports.subscribeTheLightBulbFromMQQT = async (event) => {
                 };
             }
             
-            // Send email
             await sendEmail(email, "The light bulb is now ON.", "Light Bulb Status Notification");
         }
 
@@ -366,7 +328,7 @@ module.exports.subscribeTheLightBulbFromMQQT = async (event) => {
 async function getUserEmail(userId) {
     try {
         const params = {
-            UserPoolId: 'us-east-1_akwkFcl3R',
+            UserPoolId: 'us-east-1_wUy7rlOCn',
             Username: userId
         };
         const user = await cognitoIdentityServiceProvider.adminGetUser(params).promise();
@@ -418,7 +380,7 @@ module.exports.loginUsingCognito = async (event) => {
             },
         };
         const adminPram = {
-            UserPoolId: 'us-east-1_akwkFcl3R',
+            UserPoolId: 'us-east-1_wUy7rlOCn',
             Username: username
         };
 
@@ -435,16 +397,12 @@ module.exports.loginUsingCognito = async (event) => {
 
 module.exports.goingForHoliday = async (event) => {
     const { userId } = JSON.parse(event.body);
-
-    // const userId = await findUserNameFromEmail(email);
     const queryParams = {
         TableName: 'UserHomeThingGroupData',
         Key: {
             'userId': userId,
         },
     };
-
-    // Perform the GetItem operation
     const scanedData = await docClient.get(queryParams).promise();
     const dynamoParams = {
         TableName: 'UserHomeThingGroupData',
@@ -463,7 +421,7 @@ module.exports.goingForHoliday = async (event) => {
 
 async function listoutUsersPoolClienId() {
     const CognitoParams = {
-        UserPoolId: 'us-east-1_akwkFcl3R' // Replace with your actual user pool ID
+        UserPoolId: 'us-east-1_wUy7rlOCn' // Replace with your actual user pool ID
     };
     const response = await cognitoIdentityServiceProvider.listUserPoolClients(CognitoParams).promise();
     console.log("ClientId", response.UserPoolClients[0].ClientId);
@@ -477,8 +435,6 @@ async function getUserDataFromDynamo(userId) {
             'userId': userId,
         },
     };
-
-    // Perform the GetItem operation
     const scanedData = await docClient.get(queryParams).promise();
     return scanedData;
 }
