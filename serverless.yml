@@ -156,7 +156,8 @@ provider:
       Action:
         - cognito-idp:ListUserPoolClients
         - cognito-idp:AdminGetUser
-        - cognito-idp:initiateAuth        
+        - cognito-idp:initiateAuth
+        - cognito-idp:confirmSignUp        
       Resource: "arn:aws:cognito-idp:us-east-1:730335246533:userpool/*"
     - Effect: Allow
       Action:
@@ -225,6 +226,24 @@ functions:
           path: signIn
           method: post
           cors: true
+
+  listoutThingsInIOTcore:
+    handler: handler.listoutThingsInIOTcore
+    events:
+      - http:
+          path: authorizeThings
+          method: post
+          cors: true
+
+  signUpComfirmation:
+    handler: handler.signUpComfirmation
+    events:
+      - http:
+          path: signUpComfirmation
+          method: post
+          cors:
+            origin: '*'
+            allowCredentials: true                   
 
   goingForHoliday:
     handler: handler.goingForHoliday

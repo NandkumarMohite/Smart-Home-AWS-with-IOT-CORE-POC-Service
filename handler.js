@@ -384,22 +384,7 @@ async function sendEmail(email, data, subjectData) {
 
 module.exports.loginUsingCognito = async (event) => {
     const { username, password } = JSON.parse(event.body);
-    const response = await listoutUsersPoolClienId();
-    console.log("ClientId", response.UserPoolClients[0].ClientId);
-    try {
-        const params = {
-            AuthFlow: 'USER_PASSWORD_AUTH',
-            ClientId: response.UserPoolClients[0].ClientId,
-            AuthParameters: {
-                USERNAME: username,
-                PASSWORD: password,
-            },
-        };
-        const data = await cognitoIdentityServiceProvider.initiateAuth(params).promise();
-        return httpResponse(200, { data: data});
-    } catch (err) {
-        return httpError(401, { message: err.message })
-    }
+    return await loginMethod(username, password );
 };
 
 module.exports.goingForHoliday = async (event) => {
@@ -470,4 +455,91 @@ async function putDataIntoDynamoDb(scanedData, message) {
         }
     };
     await docClient.put(dynamoParams).promise();
+}
+
+module.exports.listoutThingsInIOTcore = async (event) => {
+    const thingName = event.thingName;
+    const token = event.headers.accesstoken;
+    const response = await cognitoIdentityServiceProvider.getUser({ AccessToken: token }).promise();
+    const userId = response.Username;
+    try {
+        const data = await iot.listThings().promise();    
+        const thingExists = data.things.some(thing => thing.thingName === thingName);
+        if (thingExists) {
+            if(await checkThingsAreAsociatedToAnyUser(thingName,userId)){
+                return httpResponse(200,{ message: `${thingName} exists in AWS IoT Core` , avaibality : true});
+            }else{
+                return httpResponse(401,{ message: `${thingName} exists in AWS IoT Core but you are not end user` , avaibality : false});
+            }
+
+        } else {
+            return httpResponse(404,{ message: `${thingName} does not exists in AWS IoT Core` , avaibality : false});
+        }
+    } catch (err) {
+        return httpResponse(500,{ message: `Error: ${err.message}` });
+    }
+};
+
+async function checkThingsAreAsociatedToAnyUser(thingName,userId) {
+    try {
+        const params = {
+            TableName: 'UserAndThingData',
+            ProjectionExpression: 'userId, thingName', // Include other attributes you want to retrieve
+            KeyConditionExpression: 'thingName = :tn',
+            FilterExpression: 'userId = :uid', // Filter the results based on userId
+            ExpressionAttributeValues: {
+              ':tn': thingName,
+              ':uid': userId // Replace 'id' with the actual userId value you want to query for
+            }
+          };
+
+        const dbData = await dynamodb.query(params).promise();
+
+        if (dbData.Items.length === 0) {
+            return true;
+        } else {
+            return false;
+
+        }
+    } catch (err) {
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ message: `Error: ${err.message}` })
+        };
+    }
+}
+
+module.exports.signUpComfirmation = async (event) => {
+    const { username, password, confirmationCode } = JSON.parse(event.body);
+    const response = await listoutUsersPoolClienId();
+    const params = {
+        ClientId: response.UserPoolClients[0].ClientId,
+        ConfirmationCode: confirmationCode,
+        Username: username
+    };
+    try {
+        await cognitoIdentityServiceProvider.confirmSignUp(params).promise();
+        return await loginMethod(username, password);
+    } catch (err) {
+        return httpResponse(500,{ message: `Error: ${err.message}` });
+    }
+};
+
+async function loginMethod(username, password){
+    const response = await listoutUsersPoolClienId();
+    console.log("ClientId", response.UserPoolClients[0].ClientId);
+    try {
+        const params = {
+            AuthFlow: 'USER_PASSWORD_AUTH',
+            ClientId: response.UserPoolClients[0].ClientId,
+            AuthParameters: {
+                USERNAME: username,
+                PASSWORD: password,
+            },
+        };
+        const data = await cognitoIdentityServiceProvider.initiateAuth(params).promise();
+        return httpResponse(200, { data: data});
+    } catch (err) {
+        return httpError(401, { message: err.message })
+    }
 }
