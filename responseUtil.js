@@ -19,6 +19,7 @@ function buildResponse(statusCode, body) {
         headers: {
             'Access-Control-Allow-Origin': "*",
             'Access-Control-Allow-Credentials': true,
+            'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,accesstoken',
             'Strict-Transport-Security':
                 'max-age=31536000; includeSubDomains; preload',
             'X-Frame-Options': 'DENY',

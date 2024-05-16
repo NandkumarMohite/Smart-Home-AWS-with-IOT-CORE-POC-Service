@@ -130,7 +130,19 @@ provider:
         - dynamodb:PutItem
         - dynamodb:UpdateItem
         - dynamodb:DeleteItem
-      Resource: "arn:aws:dynamodb:us-east-1:730335246533:table/UserHomeThingGroupData"  
+      Resource: "arn:aws:dynamodb:us-east-1:730335246533:table/UserHomeThingGroupData"
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+      Resource: "arn:aws:dynamodb:us-east-1:730335246533:table/UserAndThingData"
+    - Effect: Allow
+      Action:
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource: "arn:aws:dynamodb:us-east-1:730335246533:table/UserAndThingData"  
     - Effect: Allow
       Action:
         - iot:CreateKeysAndCertificate
@@ -156,8 +168,8 @@ provider:
     - Effect: Allow
       Action:
         - ses:VerifyEmailIdentity
-        - "ses:SendEmail"
-        - "ses:SendRawEmail"        
+        - ses:SendEmail
+        - ses:SendRawEmail        
       Resource: "*"      
     - Effect: Allow
       Action: 
@@ -179,7 +191,20 @@ functions:
       - http:
           path: publish-to-iot
           method: post
-          cors: true
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - accesstoken # Allow the accessToken header
+            allowCredentials: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: ApiGatewayAuthorizer 
 
   subscribeTheMotionSensorFromMQQT:
     handler: handler.subscribeTheMotionSensorFromMQQT
@@ -207,7 +232,20 @@ functions:
       - http:
           path: holiday
           method: post
-          cors: true          
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - accesstoken # Allow the accessToken header
+            allowCredentials: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: ApiGatewayAuthorizer         
 
 resources:
   Resources:
@@ -224,7 +262,6 @@ resources:
         ProvisionedThroughput:
           ReadCapacityUnits: 5
           WriteCapacityUnits: 5
-  Resources:
     UserAndThingData:
       Type: AWS::DynamoDB::Table
       Properties:
@@ -283,6 +320,21 @@ resources:
           - ALLOW_USER_PASSWORD_AUTH
           - ALLOW_REFRESH_TOKEN_AUTH
         GenerateSecret: false
+
+    ApiGatewayRestApi:
+      Type: AWS::ApiGateway::RestApi
+      Properties:
+        Name: UpdateEmailServiceApi
+
+    ApiGatewayAuthorizer:
+      Type: AWS::ApiGateway::Authorizer
+      Properties:
+        Name: CognitoUserAuthorizer
+        Type: COGNITO_USER_POOLS
+        IdentitySource: method.request.header.Authorization
+        RestApiId: !Ref ApiGatewayRestApi
+        ProviderARNs:
+          - !Sub arn:aws:cognito-idp:us-east-1:730335246533:userpool/us-east-1_hX7YlEyJy   
                                   
 plugins:
   - serverless-offline # for local testing
