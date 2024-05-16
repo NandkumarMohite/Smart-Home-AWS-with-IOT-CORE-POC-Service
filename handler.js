@@ -231,6 +231,7 @@ module.exports.subscribeTheMotionSensorFromMQQT = async (event) => {
         };
     }
 };
+
 async function holidayChackMethod(email, userId) {
     try {
         const dynamoParams = {
@@ -255,6 +256,7 @@ async function holidayChackMethod(email, userId) {
     }
 
 }
+
 async function publishLightBulbSignalToMQQT(message, userId) {
     const thingGroupName = `Home_${userId}`;
     const thingName = `LightBulb_${userId}`;
