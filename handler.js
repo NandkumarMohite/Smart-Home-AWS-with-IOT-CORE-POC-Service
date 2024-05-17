@@ -45,7 +45,7 @@ module.exports.registerUser = async (event) => {
         };
 
         const data = await cognitoIdentityServiceProvider.signUp(signUpParams).promise();
-        let motionSensorArray = await addThingGroupForUser(data.UserSub);
+        // let motionSensorArray = await addThingGroupForUser(data.UserSub);
         await verifyEmailAddress(email);
         await registerUserInDynamo(data.UserSub, { username, email, address, gender, given_name, password }, motionSensorArray);
         return httpResponse(200, { data: data })
@@ -75,65 +75,65 @@ async function verifyEmailAddress(email) {
     }
 }
 
-async function addThingGroupForUser(UserSub) {
-    const userId = UserSub;
-    try {
-        const params = {
-            thingGroupName: `Home_${userId}`,
-            thingGroupProperties: {
-                thingGroupDescription: `Thing group for user ${userId}'s home`
-            }
-        };
-        await iot.createThingGroup(params).promise();
-        console.log("Thing group for user's home created successfully:", params);
+// async function addThingGroupForUser(UserSub) {
+//     const userId = UserSub;
+//     try {
+//         const params = {
+//             thingGroupName: `Home_${userId}`,
+//             thingGroupProperties: {
+//                 thingGroupDescription: `Thing group for user ${userId}'s home`
+//             }
+//         };
+//         await iot.createThingGroup(params).promise();
+//         console.log("Thing group for user's home created successfully:", params);
 
-        const lightBulbParams = {
-            thingName: `LightBulb_${userId}`
-        };
-        try {
-            const lightBulbData = await iot.createThing(lightBulbParams).promise();
-            console.log('New light bulb created:', lightBulbData);
-        } catch (err) {
-            if (err.code === 'ResourceAlreadyExistsException') {
-                console.log('Light bulb already exists. Your logic here...');
-            } else {
-                console.error('Error creating light bulb:', err);
-            }
-        }
-        const lightBulbGroupParams = {
-            thingGroupName: `Home_${userId}`,
-            thingName: lightBulbParams.thingName
-        };
-        await iot.addThingToThingGroup(lightBulbGroupParams).promise();
-        console.log("Light bulb thing added to home group successfully:", lightBulbGroupParams);
-        const motionSensorParams = {
-            thingName: `MotionSensor_${userId}`
-        };
+//         const lightBulbParams = {
+//             thingName: `LightBulb_${userId}`
+//         };
+//         try {
+//             const lightBulbData = await iot.createThing(lightBulbParams).promise();
+//             console.log('New light bulb created:', lightBulbData);
+//         } catch (err) {
+//             if (err.code === 'ResourceAlreadyExistsException') {
+//                 console.log('Light bulb already exists. Your logic here...');
+//             } else {
+//                 console.error('Error creating light bulb:', err);
+//             }
+//         }
+//         const lightBulbGroupParams = {
+//             thingGroupName: `Home_${userId}`,
+//             thingName: lightBulbParams.thingName
+//         };
+//         await iot.addThingToThingGroup(lightBulbGroupParams).promise();
+//         console.log("Light bulb thing added to home group successfully:", lightBulbGroupParams);
+//         const motionSensorParams = {
+//             thingName: `MotionSensor_${userId}`
+//         };
 
-        try {
-            const motionSensorData = await iot.createThing(motionSensorParams).promise();
-            console.log("Motion sensor thing created successfully:", motionSensorData);
-        } catch (err) {
-            if (err.code === 'ResourceAlreadyExistsException') {
-                console.log('Sensor already exists. Your logic here...');
-            } else {
-                console.error('Error creating motion sensor:', err);
-            }
-        }
+//         try {
+//             const motionSensorData = await iot.createThing(motionSensorParams).promise();
+//             console.log("Motion sensor thing created successfully:", motionSensorData);
+//         } catch (err) {
+//             if (err.code === 'ResourceAlreadyExistsException') {
+//                 console.log('Sensor already exists. Your logic here...');
+//             } else {
+//                 console.error('Error creating motion sensor:', err);
+//             }
+//         }
 
-        const motionSensorGroupParams = {
-            thingGroupName: `Home_${userId}`,
-            thingName: motionSensorParams.thingName
-        };
-        await iot.addThingToThingGroup(motionSensorGroupParams).promise();
-        console.log("Motion sensor thing added to home group successfully:", motionSensorGroupParams);
-        return [lightBulbGroupParams, motionSensorGroupParams];
-    } catch (error) {
-        console.error("Error creating things and group:", error);
-        return httpError(500, { message: 'Error creating things and group', error: error });
-    }
+//         const motionSensorGroupParams = {
+//             thingGroupName: `Home_${userId}`,
+//             thingName: motionSensorParams.thingName
+//         };
+//         await iot.addThingToThingGroup(motionSensorGroupParams).promise();
+//         console.log("Motion sensor thing added to home group successfully:", motionSensorGroupParams);
+//         return [lightBulbGroupParams, motionSensorGroupParams];
+//     } catch (error) {
+//         console.error("Error creating things and group:", error);
+//         return httpError(500, { message: 'Error creating things and group', error: error });
+//     }
 
-}
+// }
 
 async function registerUserInDynamo(userid, data, motionSensorArray) {
     const dynamoParams = {
@@ -151,12 +151,11 @@ async function registerUserInDynamo(userid, data, motionSensorArray) {
         TableName: 'UserAndThingData',
         Item: {
             userId: userid,
-            motionSensor: motionSensorArray[1].thingName,
-            lightBulb: motionSensorArray[0].thingName
+            thingName: " "
         }
     }
     await docClient.put(dynamoParams).promise();
-    console.log("dynamoParamsForThing", dynamoParamsForThing)
+    // console.log("dynamoParamsForThing", dynamoParamsForThing)
     await docClient.put(dynamoParamsForThing).promise();
 
 }
@@ -344,7 +343,7 @@ module.exports.subscribeTheLightBulbFromMQQT = async (event) => {
 async function getUserEmail(userId) {
     try {
         const params = {
-            UserPoolId: 'us-east-1_hX7YlEyJy',
+            UserPoolId: 'us-east-1_YGfxBRgOW',
             Username: userId
         };
         const user = await cognitoIdentityServiceProvider.adminGetUser(params).promise();
@@ -425,7 +424,7 @@ module.exports.goingForHoliday = async (event) => {
 
 async function listoutUsersPoolClienId() {
     const CognitoParams = {
-        UserPoolId: 'us-east-1_hX7YlEyJy' // Replace with your actual user pool ID
+        UserPoolId: 'us-east-1_YGfxBRgOW' // Replace with your actual user pool ID
     };
     const response = await cognitoIdentityServiceProvider.listUserPoolClients(CognitoParams).promise();
     console.log("ClientId", response.UserPoolClients[0].ClientId);
@@ -458,7 +457,8 @@ async function putDataIntoDynamoDb(scanedData, message) {
 }
 
 module.exports.listoutThingsInIOTcore = async (event) => {
-    const thingName = event.thingName;
+    const { thingName } = JSON.parse(event.body);
+    console.log("thingName",thingName);
     const token = event.headers.accesstoken;
     const response = await cognitoIdentityServiceProvider.getUser({ AccessToken: token }).promise();
     const userId = response.Username;
@@ -466,14 +466,22 @@ module.exports.listoutThingsInIOTcore = async (event) => {
         const data = await iot.listThings().promise();    
         const thingExists = data.things.some(thing => thing.thingName === thingName);
         if (thingExists) {
-            if(await checkThingsAreAsociatedToAnyUser(thingName,userId)){
-                return httpResponse(200,{ message: `${thingName} exists in AWS IoT Core` , avaibality : true});
+            let resp = await checkThingsAreAsociatedToAnyUser(thingName,userId);
+            console.log(resp);
+            if(resp == true){
+                return httpResponse(200,{ message: `${thingName} exists in AWS IoT Core` , 
+                avaibality : true, 
+                NameOfThing : thingName });
             }else{
-                return httpResponse(401,{ message: `${thingName} exists in AWS IoT Core but you are not end user` , avaibality : false});
+                return httpResponse(401,{ message: `${thingName} exists in AWS IoT Core but you are not end user` , 
+                avaibality : false,
+                NameOfThing : thingName});
             }
 
         } else {
-            return httpResponse(404,{ message: `${thingName} does not exists in AWS IoT Core` , avaibality : false});
+            return httpResponse(404,{ message: `${thingName} does not exists in AWS IoT Core` , 
+            avaibality : false, 
+            NameOfThing : thingName});
         }
     } catch (err) {
         return httpResponse(500,{ message: `Error: ${err.message}` });
@@ -482,30 +490,31 @@ module.exports.listoutThingsInIOTcore = async (event) => {
 
 async function checkThingsAreAsociatedToAnyUser(thingName,userId) {
     try {
-        const params = {
+          const params = {
             TableName: 'UserAndThingData',
-            ProjectionExpression: 'userId, thingName', // Include other attributes you want to retrieve
-            KeyConditionExpression: 'thingName = :tn',
-            FilterExpression: 'userId = :uid', // Filter the results based on userId
+            FilterExpression: 'contains(thingName, :thing)',
             ExpressionAttributeValues: {
-              ':tn': thingName,
-              ':uid': userId // Replace 'id' with the actual userId value you want to query for
+                ':thing': thingName
             }
-          };
-
-        const dbData = await dynamodb.query(params).promise();
-
-        if (dbData.Items.length === 0) {
-            return true;
-        } else {
-            return false;
-
-        }
-    } catch (err) {
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ message: `Error: ${err.message}` })
         };
+    
+        try {
+            const data = await docClient.scan(params).promise();
+            console.log("dbdata",data)
+            if (data.Items.length == 0) {
+                return true;
+            } else {
+                return false;
+    
+            }
+        } catch (err) {
+            console.error('Unable to query. Error:', err);
+            return err;
+        } 
+
+
+    } catch (err) {
+        return httpResponse(500,{ message: `Error: ${err.message}` });
     }
 }
 
@@ -541,5 +550,76 @@ async function loginMethod(username, password){
         return httpResponse(200, { data: data});
     } catch (err) {
         return httpError(401, { message: err.message })
+    }
+}
+
+module.exports.registerTheThingForUser = async (event) => {
+    const { thingNames } = JSON.parse(event.body);
+    const token = event.headers.accesstoken;
+    const response = await cognitoIdentityServiceProvider.getUser({ AccessToken: token }).promise();
+    const userId = response.Username;
+    try {
+    const dynamoParamsForThing = {
+        TableName: 'UserAndThingData',
+        Item: {
+            userId: userId,
+            thingName: thingNames[0]+" "+thingNames[1]
+        }
+    }
+     await docClient.put(dynamoParamsForThing).promise();
+     return httpResponse(200, { message: "Successfully Registerd two thing"});
+    } catch (err) {
+        return httpResponse(500, {message: err.message });
+    }
+};
+
+module.exports.checkIsUserHasThings = async (event) =>{
+    const token = event.headers.accesstoken;
+    const response = await cognitoIdentityServiceProvider.getUser({ AccessToken: token }).promise();
+    const userId = response.Username;
+
+    const params = {
+        TableName: 'UserAndThingData',
+        Key: {
+            'userId': userId
+        }
+    };
+
+    try {
+        const data = await docClient.get(params).promise();
+        let thingsAre = data.Item?.thingName;
+        if (data.Item && thingsAre != " ") {
+            return httpResponse(200, {
+                hasThings: data.Item.thingName.length > 0, // Check if the user has any things
+                things: data.Item.thingName // Return the list of things if needed
+            });
+        } else {
+        return httpResponse(404, {
+            message: 'No data found for the provided userId.',
+            hasThings: data.Item.thingName.length >=1, // Check if the user has any things
+            things: [] // Return the list of things if needed
+        });
+        }
+    } catch (err) {
+        console.error('Unable to query. Error:', err);
+        return httpResponse(500,{ message: `Error: ${err.message}` });
+    }
+
+}
+
+async function foundOutAllThingsforUser(userId){
+    const params = {
+        TableName: 'UserAndThingData',
+        Key: {
+            'userId': userId
+        }
+    };
+
+    try {
+        const data = await docClient.get(params).promise();
+
+    return data.Item.thingName.split(" ");
+    } catch(e){
+
     }
 }

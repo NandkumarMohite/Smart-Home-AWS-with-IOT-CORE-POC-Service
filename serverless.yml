@@ -147,6 +147,7 @@ provider:
       Action:
         - iot:CreateKeysAndCertificate
         - iot:AttachThingPrincipal
+        - iot:ListThings
       Resource: "*"
     - Effect: Allow
       Action:
@@ -233,7 +234,62 @@ functions:
       - http:
           path: authorizeThings
           method: post
-          cors: true
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - accesstoken # Allow the accessToken header
+            allowCredentials: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: ApiGatewayAuthorizer
+
+  registerTheThingForUser:
+    handler: handler.registerTheThingForUser
+    events:
+      - http:
+          path: registerTheThingtoUser
+          method: post
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - accesstoken # Allow the accessToken header
+            allowCredentials: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: ApiGatewayAuthorizer
+
+  checkIsUserHasThings:
+    handler: handler.checkIsUserHasThings
+    events:
+      - http:
+          path: checkIsUserHasThings
+          method: post
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - accesstoken # Allow the accessToken header
+            allowCredentials: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: ApiGatewayAuthorizer
 
   signUpComfirmation:
     handler: handler.signUpComfirmation
@@ -353,7 +409,7 @@ resources:
         IdentitySource: method.request.header.Authorization
         RestApiId: !Ref ApiGatewayRestApi
         ProviderARNs:
-          - !Sub arn:aws:cognito-idp:us-east-1:730335246533:userpool/us-east-1_hX7YlEyJy   
+          - !Sub arn:aws:cognito-idp:us-east-1:730335246533:userpool/us-east-1_YGfxBRgOW   
                                   
 plugins:
   - serverless-offline # for local testing
